@@ -15,7 +15,8 @@
 .inline-actions,
 .rating-row,
 .filter-panel,
-.tag-row {
+.tag-row,
+.account-panel {
   display: flex;
 }
 
@@ -46,7 +47,8 @@
 .hero-actions,
 .sentence-actions,
 .inline-actions,
-.rating-row {
+.rating-row,
+.account-panel {
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -151,7 +153,9 @@
 .nav-pill,
 .primary-button,
 .secondary-button,
-.icon-button {
+.icon-button,
+.sync-pill,
+.user-pill {
   border-radius: 999px;
 }
 
@@ -167,6 +171,27 @@
   align-items: center;
   padding: 6px 12px;
   background: rgba(31, 86, 255, 0.08);
+}
+
+.sync-pill,
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.sync-synced {
+  color: #1e5b41;
+}
+
+.sync-syncing {
+  color: #1f56ff;
+}
+
+.sync-sync-failed {
+  color: #b13c2e;
 }
 
 .nav-pill,
@@ -221,6 +246,10 @@
 .icon-button:hover,
 .nav-pill:hover {
   transform: translateY(-1px);
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
 }
 
 .align-start {
@@ -354,5 +383,15 @@
   .hero-panel {
     padding: 20px;
     border-radius: 22px;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }

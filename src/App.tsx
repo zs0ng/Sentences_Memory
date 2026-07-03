@@ -8,6 +8,9 @@ import {
   FilePlus2,
   Filter,
   LayoutDashboard,
+  LoaderCircle,
+  LogIn,
+  LogOut,
   PencilLine,
   RotateCcw,
   Search,
@@ -23,8 +26,20 @@ import {
   submitReview,
   updateSentence,
 } from './db/localDb'
+import {
+  isFirebaseConfigured,
+  removeSentenceFromCloud,
+  signInWithGoogle,
+  signOutFromFirebase,
+  subscribeToAuth,
+  syncAllData,
+  syncReviewLog,
+  syncSentence,
+  type SyncStatus,
+} from './services/cloudSync'
 import { parseSentencesFromText } from './utils/parseSentences'
 import type { ReviewResult, Sentence } from './types/sentence'
+import type { User } from 'firebase/auth'
 
 type DashboardStats = {
   dueCount: number
@@ -48,9 +63,37 @@ function App() {
   const [stats, setStats] = useState<DashboardStats>(emptyStats)
   const [isLoading, setIsLoading] = useState(true)
   const [notice, setNotice] = useState<string>('')
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('local-only')
+  const [isAuthLoading, setIsAuthLoading] = useState(isFirebaseConfigured)
 
   useEffect(() => {
     void refreshData()
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAuth(async (user) => {
+      setCurrentUser(user)
+      setIsAuthLoading(false)
+
+      if (!user) {
+        setSyncStatus('local-only')
+        return
+      }
+
+      setSyncStatus('syncing')
+      try {
+        await syncAllData(user.uid)
+        await refreshData()
+        setSyncStatus('synced')
+      } catch (error) {
+        console.error(error)
+        setSyncStatus('sync-failed')
+        setNotice('Firebase sync failed.')
+      }
+    })
+
+    return unsubscribe
   }, [])
 
   useEffect(() => {
@@ -62,7 +105,7 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [notice])
 
-async function refreshData() {
+  async function refreshData() {
     setIsLoading(true)
 
     const [activeSentences, allDueSentences, reviewLogCount] = await Promise.all([
@@ -103,19 +146,87 @@ async function refreshData() {
 
   async function handleSave(sentence: Sentence) {
     await updateSentence(sentence)
+
+    if (currentUser) {
+      setSyncStatus('syncing')
+      try {
+        await syncSentence(currentUser.uid, {
+          ...sentence,
+          updatedAt: new Date().toISOString(),
+        })
+        setSyncStatus('synced')
+      } catch (error) {
+        console.error(error)
+        setSyncStatus('sync-failed')
+      }
+    }
+
     await refreshData()
     setNotice('Sentence saved.')
   }
 
   async function handleDelete(id: string) {
     await deleteSentence(id)
+
+    if (currentUser) {
+      setSyncStatus('syncing')
+      try {
+        await removeSentenceFromCloud(currentUser.uid, id)
+        setSyncStatus('synced')
+      } catch (error) {
+        console.error(error)
+        setSyncStatus('sync-failed')
+      }
+    }
+
     await refreshData()
     setNotice('Sentence deleted.')
   }
 
   async function handleReview(sentence: Sentence, result: ReviewResult) {
-    await submitReview(sentence, result)
+    const updated = await submitReview(sentence, result)
+
+    if (currentUser) {
+      setSyncStatus('syncing')
+      try {
+        await Promise.all([
+          syncSentence(currentUser.uid, updated.sentence),
+          syncReviewLog(currentUser.uid, updated.reviewLog),
+        ])
+        setSyncStatus('synced')
+      } catch (error) {
+        console.error(error)
+        setSyncStatus('sync-failed')
+      }
+    }
+
     await refreshData()
+  }
+
+  async function handleSignIn() {
+    if (!isFirebaseConfigured) {
+      setNotice('Firebase config is missing.')
+      return
+    }
+
+    setSyncStatus('syncing')
+    try {
+      await signInWithGoogle()
+    } catch (error) {
+      console.error(error)
+      setSyncStatus('sync-failed')
+      setNotice('Google sign-in failed.')
+    }
+  }
+
+  async function handleSignOut() {
+    try {
+      await signOutFromFirebase()
+      setNotice('Signed out.')
+    } catch (error) {
+      console.error(error)
+      setNotice('Sign-out failed.')
+    }
   }
 
   return (
@@ -131,6 +242,30 @@ async function refreshData() {
           <NavLinkItem to="/library" icon={<BookOpen size={18} />} label="Library" />
           <NavLinkItem to="/review" icon={<Brain size={18} />} label="Review" />
         </nav>
+        <div className="account-panel">
+          <span className={`sync-pill sync-${syncStatus}`}>
+            {syncStatusLabel(syncStatus, isAuthLoading)}
+          </span>
+          {currentUser ? (
+            <>
+              <span className="user-pill">{currentUser.email}</span>
+              <button type="button" className="secondary-button" onClick={() => void handleSignOut()}>
+                <LogOut size={16} />
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!isFirebaseConfigured || isAuthLoading}
+              onClick={() => void handleSignIn()}
+            >
+              {isAuthLoading ? <LoaderCircle size={16} className="spin" /> : <LogIn size={16} />}
+              Sign in with Google
+            </button>
+          )}
+        </div>
       </header>
 
       {notice ? <div className="notice">{notice}</div> : null}
@@ -177,6 +312,23 @@ async function refreshData() {
       </main>
     </div>
   )
+}
+
+function syncStatusLabel(status: SyncStatus, isAuthLoading: boolean) {
+  if (isAuthLoading) {
+    return 'Checking auth...'
+  }
+
+  switch (status) {
+    case 'local-only':
+      return 'Local only'
+    case 'syncing':
+      return 'Syncing...'
+    case 'synced':
+      return 'Synced'
+    case 'sync-failed':
+      return 'Sync failed'
+  }
 }
 
 function NavLinkItem({
