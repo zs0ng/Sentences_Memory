@@ -1,0 +1,71 @@
+:root {
+  --bg: #f5efe4;
+  --panel: rgba(255, 250, 244, 0.88);
+  --card-bg: rgba(255, 255, 255, 0.72);
+  --text: #2c241d;
+  --heading: #14110f;
+  --muted: #7a685a;
+  --border: rgba(74, 52, 34, 0.14);
+  --accent: #1f56ff;
+  --shadow: 0 24px 80px rgba(69, 47, 29, 0.08);
+  font-family:
+    'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.6), transparent 40%),
+    linear-gradient(180deg, #f6f0e6 0%, #efe5d5 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+p,
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  line-height: 0.95;
+  color: var(--heading);
+}
+
+h2,
+h3 {
+  color: var(--heading);
+}
+
+#root {
+  min-height: 100vh;
+}
