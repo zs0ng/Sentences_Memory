@@ -42,8 +42,20 @@ export async function listSentences() {
   return db.sentences.orderBy('createdAt').reverse().toArray()
 }
 
+export async function listActiveSentences() {
+  return db.sentences
+    .orderBy('createdAt')
+    .reverse()
+    .filter((sentence) => !sentence.archived)
+    .toArray()
+}
+
 export async function countReviewLogs() {
   return db.reviewLogs.count()
+}
+
+export async function listReviewLogs() {
+  return db.reviewLogs.orderBy('reviewedAt').reverse().toArray()
 }
 
 export async function listDueSentences(now = new Date().toISOString()) {
@@ -84,6 +96,25 @@ export async function updateSentence(sentence: Sentence) {
 export async function deleteSentence(id: string) {
   await db.sentences.delete(id)
   await db.reviewLogs.where('sentenceId').equals(id).delete()
+}
+
+export async function clearDatabase() {
+  await db.transaction('rw', db.sentences, db.reviewLogs, async () => {
+    await db.reviewLogs.clear()
+    await db.sentences.clear()
+  })
+}
+
+export async function seedDatabase(sentences: Sentence[], reviewLogs: ReviewLog[] = []) {
+  await clearDatabase()
+
+  await db.transaction('rw', db.sentences, db.reviewLogs, async () => {
+    await db.sentences.bulkPut(sentences)
+
+    if (reviewLogs.length > 0) {
+      await db.reviewLogs.bulkPut(reviewLogs)
+    }
+  })
 }
 
 export async function submitReview(sentence: Sentence, result: ReviewResult) {

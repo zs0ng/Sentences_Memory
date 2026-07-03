@@ -13,7 +13,9 @@
 .hero-actions,
 .split-panel,
 .inline-actions,
-.rating-row {
+.rating-row,
+.filter-panel,
+.tag-row {
   display: flex;
 }
 
@@ -53,7 +55,8 @@
 .stack,
 .preview-list,
 .edit-form,
-.answer-block {
+.answer-block,
+.filter-panel {
   display: grid;
   gap: 20px;
 }
@@ -263,6 +266,10 @@
   gap: 18px;
 }
 
+.filter-panel {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
 .reveal-panel {
   padding: 18px;
   border-radius: 20px;
@@ -285,6 +292,41 @@
   padding: 8px 12px;
   border-radius: 999px;
   background: var(--card-bg);
+}
+
+.sentence-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tag-row {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tag-chip {
+  display: inline-flex;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(31, 86, 255, 0.08);
+  color: var(--text);
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px 16px;
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .edit-form label {

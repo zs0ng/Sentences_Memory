@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import {
+  Archive,
   BookOpen,
   Brain,
   CheckCircle2,
   FilePlus2,
+  Filter,
   LayoutDashboard,
   PencilLine,
   RotateCcw,
+  Search,
   Trash2,
 } from 'lucide-react'
 import './App.css'
@@ -15,8 +18,8 @@ import {
   countReviewLogs,
   deleteSentence,
   importSentences,
+  listActiveSentences,
   listDueSentences,
-  listSentences,
   submitReview,
   updateSentence,
 } from './db/localDb'
@@ -59,22 +62,22 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [notice])
 
-  async function refreshData() {
+async function refreshData() {
     setIsLoading(true)
 
-    const [allSentences, allDueSentences, reviewLogCount] = await Promise.all([
-      listSentences(),
+    const [activeSentences, allDueSentences, reviewLogCount] = await Promise.all([
+      listActiveSentences(),
       listDueSentences(),
       countReviewLogs(),
     ])
 
-    setSentences(allSentences)
+    setSentences(activeSentences)
     setDueSentences(allDueSentences)
     setStats({
       dueCount: allDueSentences.length,
-      totalCount: allSentences.length,
-      masteredCount: allSentences.filter((sentence) => sentence.masteryLevel >= 5).length,
-      recentCount: allSentences.filter((sentence) => {
+      totalCount: activeSentences.length,
+      masteredCount: activeSentences.filter((sentence) => sentence.masteryLevel >= 5).length,
+      recentCount: activeSentences.filter((sentence) => {
         const createdAt = new Date(sentence.createdAt).getTime()
         return Date.now() - createdAt <= 7 * 24 * 60 * 60 * 1000
       }).length,
@@ -205,10 +208,10 @@ function DashboardPage({
   isLoading,
 }: DashboardStats & { isLoading: boolean }) {
   const cards = [
-    { label: 'Due today', value: dueCount, accent: 'accent-red' },
-    { label: 'Total sentences', value: totalCount, accent: 'accent-blue' },
-    { label: 'Mastered', value: masteredCount, accent: 'accent-green' },
-    { label: 'Recent imports', value: recentCount, accent: 'accent-gold' },
+    { key: 'due', label: 'Due today', value: dueCount, accent: 'accent-red' },
+    { key: 'total', label: 'Total sentences', value: totalCount, accent: 'accent-blue' },
+    { key: 'mastered', label: 'Mastered', value: masteredCount, accent: 'accent-green' },
+    { key: 'recent', label: 'Recent imports', value: recentCount, accent: 'accent-gold' },
   ]
 
   return (
@@ -232,7 +235,7 @@ function DashboardPage({
         {cards.map((card) => (
           <article key={card.label} className={`stat-card ${card.accent}`}>
             <p>{card.label}</p>
-            <strong>{isLoading ? '...' : card.value}</strong>
+            <strong data-testid={`stat-${card.key}`}>{isLoading ? '...' : card.value}</strong>
           </article>
         ))}
       </div>
@@ -337,6 +340,35 @@ function LibraryPage({
 }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({})
+  const [query, setQuery] = useState('')
+  const [selectedTag, setSelectedTag] = useState('all')
+
+  const tags = useMemo(
+    () =>
+      Array.from(
+        new Set(sentences.flatMap((sentence) => sentence.tags).filter(Boolean)),
+      ).sort((left, right) => left.localeCompare(right)),
+    [sentences],
+  )
+
+  const filteredSentences = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+
+    return sentences.filter((sentence) => {
+      const matchesTag = selectedTag === 'all' || sentence.tags.includes(selectedTag)
+      const haystack = [
+        sentence.originalText,
+        sentence.chineseMeaning,
+        sentence.mnemonic,
+        sentence.tags.join(' '),
+      ]
+        .join(' ')
+        .toLowerCase()
+
+      const matchesQuery = !normalizedQuery || haystack.includes(normalizedQuery)
+      return matchesTag && matchesQuery
+    })
+  }, [query, selectedTag, sentences])
 
   function toggleReveal(id: string) {
     setRevealedIds((current) => ({
@@ -350,11 +382,42 @@ function LibraryPage({
       <article className="surface">
         <div className="section-title">
           <h3>Sentence library</h3>
-          <span className="badge">{sentences.length} stored</span>
+          <span className="badge">{filteredSentences.length} shown</span>
         </div>
         <p className="muted">
-          {isLoading ? 'Loading your local sentence library...' : 'Reveal the English only when you want to check recall.'}
+          {isLoading
+            ? 'Loading your local sentence library...'
+            : 'Search by English, Chinese, mnemonic, or tags, then reveal only when you want to check recall.'}
         </p>
+      </article>
+
+      <article className="surface filter-panel">
+        <label className="field">
+          <span className="sentence-label">
+            <Search size={14} />
+            Search
+          </span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search English, Chinese, mnemonic, or tags"
+          />
+        </label>
+
+        <label className="field">
+          <span className="sentence-label">
+            <Filter size={14} />
+            Tag filter
+          </span>
+          <select value={selectedTag} onChange={(event) => setSelectedTag(event.target.value)}>
+            <option value="all">All tags</option>
+            {tags.map((tag) => (
+              <option key={tag} value={tag}>
+                {tag}
+              </option>
+            ))}
+          </select>
+        </label>
       </article>
 
       <div className="stack">
@@ -367,24 +430,40 @@ function LibraryPage({
           </article>
         ) : null}
 
-        {sentences.map((sentence) => (
+        {!isLoading && sentences.length > 0 && filteredSentences.length === 0 ? (
+          <article className="surface empty-state">
+            <p>No sentences match the current search or tag filter.</p>
+          </article>
+        ) : null}
+
+        {filteredSentences.map((sentence) => (
           <article key={sentence.id} className="surface sentence-card">
             <div className="sentence-header">
               <div>
                 <p className="sentence-label">Chinese meaning</p>
-                <p>{sentence.chineseMeaning || 'No Chinese meaning yet.'}</p>
+                <p className="sentence-text">{sentence.chineseMeaning || 'No Chinese meaning yet.'}</p>
               </div>
               <div className="sentence-actions">
                 <button
                   type="button"
                   className="icon-button"
+                  aria-label="Edit sentence"
                   onClick={() => setEditingId(sentence.id)}
                 >
                   <PencilLine size={16} />
                 </button>
                 <button
                   type="button"
+                  className="icon-button"
+                  aria-label="Archive sentence"
+                  onClick={() => void onSave({ ...sentence, archived: true })}
+                >
+                  <Archive size={16} />
+                </button>
+                <button
+                  type="button"
                   className="icon-button danger"
+                  aria-label="Delete sentence"
                   onClick={() => void onDelete(sentence.id)}
                 >
                   <Trash2 size={16} />
@@ -398,7 +477,9 @@ function LibraryPage({
               onClick={() => toggleReveal(sentence.id)}
             >
               <p className="sentence-label">English answer</p>
-              <p>{revealedIds[sentence.id] ? sentence.originalText : '████████████████ Click to reveal'}</p>
+              <p className="sentence-text">
+                {revealedIds[sentence.id] ? sentence.originalText : '████████████████ Click to reveal'}
+              </p>
             </button>
 
             <div className="sentence-meta">
@@ -407,8 +488,18 @@ function LibraryPage({
               <span>Next {formatDate(sentence.nextReviewAt)}</span>
             </div>
 
+            {sentence.tags.length > 0 ? (
+              <div className="tag-row">
+                {sentence.tags.map((tag) => (
+                  <span key={tag} className="tag-chip">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
             {sentence.mnemonic ? (
-              <p className="muted">Mnemonic: {sentence.mnemonic}</p>
+              <p className="muted sentence-text">Mnemonic: {sentence.mnemonic}</p>
             ) : null}
 
             {editingId === sentence.id ? (
@@ -546,8 +637,8 @@ function ReviewPage({
         {revealed ? (
           <div className="answer-block">
             <p className="sentence-label">English answer</p>
-            <p>{sentence.originalText}</p>
-            {sentence.mnemonic ? <p className="muted">Mnemonic: {sentence.mnemonic}</p> : null}
+            <p className="sentence-text">{sentence.originalText}</p>
+            {sentence.mnemonic ? <p className="muted sentence-text">Mnemonic: {sentence.mnemonic}</p> : null}
           </div>
         ) : (
           <button type="button" className="primary-button align-start" onClick={() => setRevealed(true)}>
