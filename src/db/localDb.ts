@@ -143,5 +143,8 @@ export async function submitReview(sentence: Sentence, result: ReviewResult) {
     await db.reviewLogs.add(reviewLog)
   })
 
-  return updatedSentence
+  return {
+    sentence: updatedSentence,
+    reviewLog,
+  }
 }

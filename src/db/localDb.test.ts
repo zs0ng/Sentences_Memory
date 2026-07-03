@@ -29,10 +29,10 @@ describe('localDb', () => {
       throw new Error('Missing climate fixture sentence')
     }
 
-    const updatedSentence = await submitReview(climateSentence, 'easy')
+    const updatedReview = await submitReview(climateSentence, 'easy')
 
-    expect(updatedSentence.nextReviewAt > new Date().toISOString()).toBe(true)
-    expect(updatedSentence.reviewCount).toBe(climateSentence.reviewCount + 1)
+    expect(updatedReview.sentence.nextReviewAt > new Date().toISOString()).toBe(true)
+    expect(updatedReview.sentence.reviewCount).toBe(climateSentence.reviewCount + 1)
     expect(await countReviewLogs()).toBe(1)
   })
 })
